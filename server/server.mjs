@@ -1,5 +1,5 @@
 /**
- * server.mjs — local Express backend for the contract-review app.
+ * server.mjs — Express backend for the contract-review demo.
  * The demo uses a JSON store, local disk uploads, and a password gate; production swaps
  * these for a DB, object storage, and SSO. In production (NODE_ENV=production) the app
  * refuses to boot without LEGAL_PASSWORD — no default credential outside dev.
@@ -15,17 +15,19 @@ import { classifyRisk } from './riskEngine.mjs';
 import { extractText } from './extract.mjs';
 import { runAiReview } from './review.mjs';
 import { createEnvelopeForRequest, getSenderViewUrl, getEnvelopeStatus, downloadSignedDocument, getBindingInfo } from './docusign.mjs';
-import { ASSIGNEES } from './config.mjs';
-import { notifyNewRequest, notifyAssignee, notifyReviewReady } from './notify.mjs';
+import { getConfig, saveConfig, resetConfig } from './settings.mjs';
+import { notifyNewRequest, notifyAssignee, notifyReviewReady, notifyRequesterSubmitted, notifyRequesterStatusUpdate } from './notify.mjs';
 import * as store from './store.mjs';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 
-// Uploads: PDF/DOCX (plus TXT/MD for testing), one file, 15 MB — enforced server-side.
+// Uploads: PDF/DOCX (plus TXT/MD for testing), up to 10 files (main contract + annexes),
+// 15 MB each — enforced server-side.
+const MAX_FILES = 10;
 const ALLOWED_UPLOAD = /\.(pdf|docx|txt|md)$/i;
 const upload = multer({
   dest: path.join(dir, 'uploads'),
-  limits: { fileSize: 15 * 1024 * 1024, files: 1, fields: 30, fieldSize: 64 * 1024 },
+  limits: { fileSize: 15 * 1024 * 1024, files: MAX_FILES, fields: 30, fieldSize: 64 * 1024 },
   fileFilter: (req, file, cb) =>
     ALLOWED_UPLOAD.test(file.originalname || '')
       ? cb(null, true)
@@ -35,6 +37,24 @@ const upload = multer({
 const app = express();
 app.set('trust proxy', 1); // behind the ingress/Vite proxy, so req.ip is the client
 app.disable('x-powered-by');
+
+// ── Security headers (no dep; same origin serves API + SPA, so the CSP is tight) ──
+// The SPA loads only same-origin JS/CSS; React inline style={{}} needs style-src 'unsafe-inline';
+// DocuSign opens in a NEW tab (window.open), so it needs no frame/connect allowance here.
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+  res.setHeader('Content-Security-Policy', [
+    "default-src 'self'", "base-uri 'self'", "object-src 'none'",
+    "frame-ancestors 'none'", "form-action 'self'",
+    "img-src 'self' data:", "style-src 'self' 'unsafe-inline'",
+    "script-src 'self'", "connect-src 'self'", "font-src 'self'",
+  ].join('; '));
+  if (IS_PROD) res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  next();
+});
+
 app.use(express.json({ limit: '2mb' }));
 
 // ── Tiny in-memory per-IP rate limiter (no deps; resets on restart — fine for demo). ──
@@ -98,14 +118,22 @@ function requireAuth(req, res, next) {
 }
 
 const INTAKE_FIELDS = [
-  'entity', 'team', 'contractType', 'counterpartyName', 'signerName', 'signerEmail',
+  'entity', 'team', 'requesterEmail', 'contractType', 'counterpartyName', 'signerName', 'signerEmail',
   'counterpartyLocation', 'relationship', 'context', 'deadline', 'amountPerYear',
   'totalValue', 'term', 'personalData', 'dataSubjects', 'criticalSystems', 'ip',
   'procurement', 'internalApproval',
 ];
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
-app.get('/api/assignees', requireAuth, (req, res) => res.json({ assignees: ASSIGNEES }));
+app.get('/api/assignees', requireAuth, (req, res) => res.json({ assignees: getConfig().assignees }));
+
+// ── Settings (Legal-editable config: thresholds, positions, type profiles, assignees) ──
+app.get('/api/settings', requireAuth, (req, res) => res.json(getConfig()));
+app.put('/api/settings', requireAuth, (req, res) => {
+  try { res.json(saveConfig(req.body || {})); }
+  catch (e) { res.status(400).json({ message: 'Invalid settings: ' + e.message }); }
+});
+app.post('/api/settings/reset', requireAuth, (req, res) => res.json(resetConfig()));
 
 // Quick status toggle. Discarding REQUIRES a reason.
 app.post('/api/requests/:id/status', requireAuth, (req, res) => {
@@ -119,6 +147,7 @@ app.post('/api/requests/:id/status', requireAuth, (req, res) => {
   const patch = { status };
   if (status === 'Discarded') patch.discardReason = discardReason || existing.discardReason;
   const updated = store.patch(req.params.id, patch);
+  notifyRequesterStatusUpdate(updated); // DM the submitter about the status change (needs bot token)
   res.json(publicView(updated));
 });
 
@@ -150,7 +179,7 @@ function pumpReviews() {
 
 // Create a request: intake fields + optional contract file (multipart) → classify → AI review.
 // Public (requesters have no account) — rate-limited, size/type-limited, fields length-capped.
-app.post('/api/requests', rateLimit({ windowMs: 60 * 60 * 1000, max: 20 }), upload.single('contractFile'), async (req, res) => {
+app.post('/api/requests', rateLimit({ windowMs: 60 * 60 * 1000, max: 20 }), upload.array('contractFiles', MAX_FILES), async (req, res) => {
   const body = req.body || {};
   if (body.signerEmail && !/^\S+@\S+\.\S+$/.test(String(body.signerEmail).trim())) {
     return res.status(400).json({ message: 'Invalid signer email address.' });
@@ -165,14 +194,23 @@ app.post('/api/requests', rateLimit({ windowMs: 60 * 60 * 1000, max: 20 }), uplo
   request.mandatoryReview = cls.mandatoryReview;
   request.triggers = cls.triggers;
 
-  // Extract contract text (if a file was uploaded).
+  // Extract contract text. Multiple files allowed (main contract + annexes like SLA/DPA):
+  // the FIRST file is the main contract; all files are stored and later added to the DocuSign
+  // envelope. Text from every file is concatenated (labelled) so the AI reviews the annexes too.
   let contractText = '';
-  if (req.file) {
-    request.contractFileName = req.file.originalname;
-    request.contractFilePath = req.file.path;
-    const ex = await extractText(req.file.path, req.file.originalname);
-    if (ex.ok) { contractText = ex.text; request.extractChars = ex.text.length; }
-    else { request.aiStatus = 'Unreadable — ' + ex.note; }
+  const uploaded = req.files || [];
+  if (uploaded.length) {
+    request.documents = uploaded.map((f) => ({ name: f.originalname, path: f.path }));
+    // Keep the single-file fields for backward compatibility (Detail view, download, envelope fallback).
+    request.contractFileName = uploaded[0].originalname;
+    request.contractFilePath = uploaded[0].path;
+    const parts = [];
+    for (const f of uploaded) {
+      const ex = await extractText(f.path, f.originalname);
+      if (ex.ok) parts.push(uploaded.length > 1 ? `===== ${f.originalname} =====\n${ex.text}` : ex.text);
+    }
+    if (parts.length) { contractText = parts.join('\n\n'); request.extractChars = contractText.length; }
+    else { request.aiStatus = 'Unreadable — no text could be extracted from the uploaded file(s)'; }
   } else {
     request.aiStatus = 'No contract file uploaded';
   }
@@ -182,6 +220,7 @@ app.post('/api/requests', rateLimit({ windowMs: 60 * 60 * 1000, max: 20 }), uplo
 
   // Notify the Legal channel (fire-and-forget; no-op if SLACK_WEBHOOK_URL unset).
   notifyNewRequest(request);
+  notifyRequesterSubmitted(request); // DM the submitter a confirmation (needs bot token)
 
   // Respond to the requester IMMEDIATELY (they don't see or wait for the AI review).
   res.status(201).json({ ok: true, id: request.id, tier: request.tier });
@@ -207,17 +246,57 @@ app.post('/api/requests', rateLimit({ windowMs: 60 * 60 * 1000, max: 20 }), uplo
 
 app.get('/api/requests', requireAuth, (req, res) => res.json({ items: store.list().map(listView) }));
 
+// Dashboard stats — counts by status/tier + average time-to-completion.
+app.get('/api/stats', requireAuth, (req, res) => {
+  const items = store.list();
+  const norm = (s) => (s === 'Closed' ? 'Done' : (s || 'New'));
+  const byStatus = {}, byTier = { LOW: 0, MEDIUM: 0, HIGH: 0 };
+  let aiComplete = 0, completedCount = 0, completedMs = 0;
+  for (const r of items) {
+    const s = norm(r.status);
+    byStatus[s] = (byStatus[s] || 0) + 1;
+    if (byTier[r.tier] !== undefined) byTier[r.tier] += 1;
+    if (r.aiStatus === 'AI review complete') aiComplete += 1;
+    if (s === 'Done' && r.createdAt) {
+      const end = new Date(r.decidedAt || r.updatedAt || r.createdAt).getTime();
+      const ms = end - new Date(r.createdAt).getTime();
+      if (ms >= 0) { completedCount += 1; completedMs += ms; }
+    }
+  }
+  const avgHours = completedCount ? completedMs / completedCount / 3600000 : null;
+  res.json({
+    total: items.length,
+    open: (byStatus['New'] || 0) + (byStatus['In progress'] || 0) + (byStatus['More information requested'] || 0),
+    byStatus, byTier, aiComplete,
+    avgCompletion: avgHours == null ? null : (avgHours < 48 ? `${Math.round(avgHours)}h` : `${(avgHours / 24).toFixed(1)}d`),
+  });
+});
+
+app.delete('/api/requests/:id', requireAuth, (req, res) => {
+  const ok = store.remove(req.params.id);
+  if (!ok) return res.status(404).json({ message: 'Not found' });
+  res.json({ ok: true });
+});
+
 app.get('/api/requests/:id', requireAuth, (req, res) => {
   const r = store.get(req.params.id);
   if (!r) return res.status(404).json({ message: 'Not found' });
   res.json(publicView(r));
 });
 
-// Download the uploaded contract document (local file → production: an object-storage URL).
+// Download the primary uploaded contract document (backward-compatible).
 app.get('/api/requests/:id/file', requireAuth, (req, res) => {
   const r = store.get(req.params.id);
   if (!r || !r.contractFilePath) return res.status(404).json({ message: 'No file' });
   res.download(r.contractFilePath, r.contractFileName || 'contract');
+});
+
+// Download a specific uploaded document by index (main contract + annexes).
+app.get('/api/requests/:id/file/:index', requireAuth, (req, res) => {
+  const r = store.get(req.params.id);
+  const doc = r?.documents?.[Number(req.params.index)];
+  if (!doc) return res.status(404).json({ message: 'No file' });
+  res.download(doc.path, doc.name || 'document');
 });
 
 // Re-run the AI review for a row (idempotent-ish: always re-runs on demand).
@@ -245,12 +324,11 @@ app.post('/api/requests/:id/decision', requireAuth, (req, res) => {
   res.json(publicView(updated));
 });
 
-// ── E-signature (DocuSign) — NOT YET INTEGRATED ──────────────────────────────
-// The integration below is real but inert: without DOCUSIGN_* credentials every
-// call returns a clean "not configured" response and nothing is sent anywhere.
-// Wiring it up is a deployment step, not a code change. See README.
+// ── DocuSign lifecycle (draft-only: a lawyer reviews & sends the envelope from DocuSign) ──
 const SITE_URL = (process.env.SITE_URL || 'http://localhost:5173').replace(/\/+$/, '');
 
+// Which DocuSign account/user envelopes route to (resolved live from userinfo), so the
+// dashboard can show which account envelopes would be created in.
 app.get('/api/docusign/config', requireAuth, async (req, res) => {
   try {
     const b = await getBindingInfo();
@@ -260,7 +338,7 @@ app.get('/api/docusign/config', requireAuth, async (req, res) => {
   }
 });
 
-// Create a DRAFT envelope (draft-only by policy: a lawyer reviews and sends it).
+// Create a DRAFT envelope.
 app.post('/api/requests/:id/docusign', requireAuth, async (req, res) => {
   const r = store.get(req.params.id);
   if (!r) return res.status(404).json({ message: 'Not found' });
@@ -269,15 +347,17 @@ app.post('/api/requests/:id/docusign', requireAuth, async (req, res) => {
     store.patch(r.id, { docusign: result, status: 'In progress' });
     res.json({ ok: true, ...result });
   } catch (e) {
-    res.json({ ok: false, configured: e.code !== 'NOT_CONFIGURED', message: e.message });
+    const configured = e.code !== 'NOT_CONFIGURED';
+    res.json({ ok: false, configured, message: e.message });
   }
 });
 
-// Short-lived URL into DocuSign's sender view (place tabs, review, send).
+// Short-lived URL into DocuSign's sender view (place tabs, review, send). Fetched on
+// demand because the URL expires after ~5 minutes.
 app.post('/api/requests/:id/docusign/sender-view', requireAuth, async (req, res) => {
   const r = store.get(req.params.id);
   if (!r) return res.status(404).json({ message: 'Not found' });
-  if (!r.docusign?.envelopeId) return res.status(400).json({ ok: false, message: 'No envelope for this request yet.' });
+  if (!r.docusign?.envelopeId) return res.status(400).json({ ok: false, message: 'No DocuSign envelope for this request yet.' });
   try {
     const url = await getSenderViewUrl(r.docusign.envelopeId, `${SITE_URL}/legal/requests/${r.id}`);
     res.json({ ok: true, url });
@@ -286,11 +366,11 @@ app.post('/api/requests/:id/docusign/sender-view', requireAuth, async (req, res)
   }
 });
 
-// Refresh the envelope status from DocuSign (poll on demand).
+// Refresh the envelope status from DocuSign (poll-on-demand; webhooks are a v2 nicety).
 app.post('/api/requests/:id/docusign/refresh', requireAuth, async (req, res) => {
   const r = store.get(req.params.id);
   if (!r) return res.status(404).json({ message: 'Not found' });
-  if (!r.docusign?.envelopeId) return res.status(400).json({ ok: false, message: 'No envelope for this request yet.' });
+  if (!r.docusign?.envelopeId) return res.status(400).json({ ok: false, message: 'No DocuSign envelope for this request yet.' });
   try {
     const status = await getEnvelopeStatus(r.docusign.envelopeId);
     const updated = store.patch(r.id, { docusign: { ...r.docusign, ...status } });
@@ -323,8 +403,8 @@ function listView(r) {
     assignedTo: r.assignedTo || '', docusignStatus: r.docusign?.status || '' };
 }
 function publicView(r) {
-  const { contractText, contractFilePath, ...rest } = r; // don't ship the full text / local path
-  return rest;
+  const { contractText, contractFilePath, documents, ...rest } = r; // don't ship the full text / local paths
+  return { ...rest, documents: (documents || []).map((d, i) => ({ name: d.name, index: i })) };
 }
 
 // In a container/production build, serve the built frontend from ./public and let the
@@ -348,4 +428,4 @@ app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
 });
 
 const PORT = Number(process.env.PORT || 4000);
-app.listen(PORT, () => console.log(`Clause — contract review running on http://localhost:${PORT}`));
+app.listen(PORT, () => console.log(`Clause — contract review on http://localhost:${PORT}`));

@@ -4,13 +4,13 @@
  *   • AI review ready  → follow-up to the Legal channel with the recommendation
  *                        (+ DM the assignee if already assigned)
  *   • assignment       → DM the assigned counsel via a bot token (SLACK_BOT_TOKEN)
- * All GATED: no env var → no-op (never breaks the request flow). See the README.
+ * All GATED: no env var → no-op (never breaks the request flow). See docs/09-slack-setup.md.
  *
  * Assignees are configured in config.mjs as { name, email } — the email is what resolves
  * the Slack DM (users.lookupByEmail). Free-entered assignees that are themselves an
  * email address also work.
  */
-import { ASSIGNEES } from './config.mjs';
+import { getConfig } from './settings.mjs';
 
 const env = () => ({
   webhook: process.env.SLACK_WEBHOOK_URL || '',
@@ -28,7 +28,7 @@ export function resolveAssigneeEmail(nameOrEmail) {
   const v = String(nameOrEmail || '').trim();
   if (!v) return '';
   if (v.includes('@')) return v;
-  const a = ASSIGNEES.find((x) => x.name.toLowerCase() === v.toLowerCase());
+  const a = getConfig().assignees.find((x) => x.name.toLowerCase() === v.toLowerCase());
   return a?.email || '';
 }
 
@@ -105,6 +105,33 @@ export async function notifyReviewReady(r) {
   await postWebhook(msg);
   const email = resolveAssigneeEmail(r.assignedTo);
   if (email) await dmByEmail(email, msg);
+}
+
+// ── Requester notifications (DM the person who submitted the intake) ──
+export function buildRequesterSubmittedMessage(r) {
+  return {
+    text: `Your contract review request for ${r.counterpartyName || 'a contract'} was received.`,
+    blocks: [{ type: 'section', text: { type: 'mrkdwn', text:
+      `✅ *Your contract review request was received.*\n*Counterparty:* ${r.counterpartyName || 'N/A'}\n*Type:* ${r.contractType || 'N/A'}\nThe Legal team will review it and get back to you. You'll get a message here when the status changes.` } }],
+  };
+}
+export function buildRequesterStatusMessage(r) {
+  const status = r.status === 'Closed' ? 'Done' : (r.status || 'New');
+  const extra = status === 'Discarded' && r.discardReason ? `\n*Reason:* ${r.discardReason}`
+    : (r.decision ? `\n*Outcome:* ${r.decision}` : '');
+  return {
+    text: `Update on your contract review for ${r.counterpartyName || 'a contract'}: ${status}`,
+    blocks: [{ type: 'section', text: { type: 'mrkdwn', text:
+      `🔔 *Update on your contract review request.*\n*Counterparty:* ${r.counterpartyName || 'N/A'}\n*Status:* ${status}${extra}` } }],
+  };
+}
+/** DM the requester that their request was received (needs bot token + requesterEmail). */
+export async function notifyRequesterSubmitted(r) {
+  if (r.requesterEmail) await dmByEmail(r.requesterEmail, buildRequesterSubmittedMessage(r));
+}
+/** DM the requester that the status changed. */
+export async function notifyRequesterStatusUpdate(r) {
+  if (r.requesterEmail) await dmByEmail(r.requesterEmail, buildRequesterStatusMessage(r));
 }
 
 /** Assigned → DM the counsel. Accepts a name (resolved via config) or an email. */

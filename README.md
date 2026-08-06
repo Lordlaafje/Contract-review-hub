@@ -65,9 +65,14 @@ get the same answer every time.
 The AI review is bounded by that tier (a LOW contract gets a short review, a HIGH one the full
 treatment) — but a material problem is always reported, whatever the tier.
 
-## What a legal team would change
+## What a legal team would change — without a developer
 
-Everything a lawyer would want to tune lives in one file, **`server/config.mjs`**:
+There is a **Settings page** in the app (`/legal/settings`). A lawyer can edit the risk
+thresholds, the standard positions, the per-contract-type AI focus and the list of counsels,
+save, and the change takes effect on the very next contract — no redeploy. Overrides are stored
+separately from the code defaults, and "Reset to defaults" discards them.
+
+The code defaults behind it live in **`server/config.mjs`**:
 
 - the organisation's name, entities and teams
 - the risk thresholds (values, term lengths, data volumes)
@@ -121,6 +126,12 @@ cd server && npm test
 
 28 tests covering the risk funnel (every trigger, every path, the type cap, the hard rule) and the
 draft-only e-signature invariant.
+
+## Notes
+
+The frontend is React + Vite with Tailwind and [shadcn/ui](https://ui.shadcn.com) components;
+icons are [Lucide](https://lucide.dev). The backend sets strict security headers (CSP, HSTS,
+nosniff, Referrer-Policy) and rate-limits the public intake endpoint.
 
 ## Stack
 

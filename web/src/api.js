@@ -44,6 +44,15 @@ export async function setStatus(id, status, discardReason) {
 export async function assign(id, assignedTo) {
   return (await authed(`/requests/${id}/assign`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ assignedTo }) })).json();
 }
+export async function deleteRequest(id) {
+  return (await authed(`/requests/${id}`, { method: 'DELETE' })).json();
+}
+export async function getStats() { return (await authed('/stats')).json(); }
+export async function getSettings() { return (await authed('/settings')).json(); }
+export async function saveSettings(cfg) {
+  return (await authed('/settings', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(cfg) })).json();
+}
+export async function resetSettings() { return (await authed('/settings/reset', { method: 'POST' })).json(); }
 export async function sendDocusign(id) { return (await authed(`/requests/${id}/docusign`, { method: 'POST' })).json(); }
 export async function docusignConfig() { return (await authed('/docusign/config')).json(); }
 export async function docusignSenderView(id) { return (await authed(`/requests/${id}/docusign/sender-view`, { method: 'POST' })).json(); }
@@ -58,8 +67,8 @@ export async function downloadSignedDoc(id, filename) {
   document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
 }
-export async function downloadFile(id, filename) {
-  const r = await authed(`/requests/${id}/file`);
+export async function downloadFile(id, filename, index) {
+  const r = await authed(`/requests/${id}/file${index != null ? '/' + index : ''}`);
   if (!r.ok) return;
   const blob = await r.blob();
   const url = URL.createObjectURL(blob);

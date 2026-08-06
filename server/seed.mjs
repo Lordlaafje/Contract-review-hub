@@ -475,6 +475,8 @@ for (const r of requests) {
   r.mandatoryReview = cls.mandatoryReview;
   if (r.review) r.aiMeta = { modelId: 'demo (stored review)', region: 'n/a', stopReason: 'end_turn' };
   r.contractText = r.contractFilePath ? fs.readFileSync(r.contractFilePath, 'utf8') : '';
+  // The dashboard/detail UI reads a documents[] list (main contract first, then annexes).
+  r.documents = r.contractFileName ? [{ index: 0, name: r.contractFileName, path: r.contractFilePath }] : [];
 }
 
 // Wipe and reload.

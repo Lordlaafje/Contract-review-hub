@@ -6,7 +6,7 @@
  *
  * Every threshold lives in config.mjs — this file is the logic, not the policy.
  */
-import { PARAMS, TYPE_PROFILES } from './config.mjs';
+import { getConfig } from './settings.mjs';
 
 const TIER_ORDER = { LOW: 0, MEDIUM: 1, HIGH: 2 };
 
@@ -17,6 +17,7 @@ const TIER_ORDER = { LOW: 0, MEDIUM: 1, HIGH: 2 };
  * @returns {{tier, triggers:string[], mandatoryReview:boolean, profile}}
  */
 export function classifyRisk(r) {
+  const { params: PARAMS, typeProfiles: TYPE_PROFILES } = getConfig();
   const totalValue = (r.totalValue || '').trim();
   const annualValue = (r.amountPerYear || '').trim();
   const term = (r.term || '').trim();

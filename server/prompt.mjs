@@ -3,7 +3,8 @@
  * two-layer scope model, per-topic RAG bands, liability always in scope,
  * intake-vs-contract cross-check, strict-JSON output.
  */
-import { PLAYBOOK_GENERAL, POSITION_BANDS, ORG } from './config.mjs';
+import { ORG } from './config.mjs';
+import { getConfig } from './settings.mjs';
 
 const SCHEMA = `{
   "summary": ["3-5 short bullets"],
@@ -30,6 +31,7 @@ function scopeText(tier) {
 }
 
 export function buildReviewPrompt({ request, tier, triggers, contractText, profile }) {
+  const { playbookGeneral: PLAYBOOK_GENERAL, positionBands: POSITION_BANDS } = getConfig();
   const f = (v) => (v && String(v).trim()) || '(not provided)';
   return [
     `ROLE: You are a senior commercial lawyer performing a FIRST-LINE review of a contract for ${ORG.name}, to support (not replace) the legal team. Your output is informational support, not legal advice; a human lawyer decides.`,
