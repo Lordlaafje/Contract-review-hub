@@ -102,7 +102,7 @@ export const TYPE_PROFILES = {
     redflags: 'unclear whether it is legally binding, joint liability for the other party\'s acts, exclusivity, unclear legal basis for data sharing, no exit, referral obligations that could conflict with client interests',
     checklist: 'Binding status, Liability split, Data sharing, Exit, Conflicts of interest' },
   'Other': { key: 'OTHER', cap: 'NONE',
-    redflags: 'unusual or one-sided terms, missing standard protections, unclear scope, term or liability',
+    redflags: 'anything markedly one-sided, protections a contract of this kind would normally carry but does not, or a scope, duration or liability position left vague',
     checklist: 'General commercial review' },
 };
 
