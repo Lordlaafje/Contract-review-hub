@@ -4,12 +4,14 @@
  * Inert unless all three are set (then every intake upload is also saved to Drive):
  *   GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET   an OAuth client of type "Desktop app"
  *   GOOGLE_REFRESH_TOKEN                     from `npm --prefix server run drive-auth`
- * Optional:
- *   GOOGLE_DRIVE_FOLDER_NAME   folder to create/use (default "Clause — contract uploads")
- *
- * Uses the narrow `drive.file` scope: the app can only see and touch files and folders it
- * created itself — never the rest of your Drive. That is also why it makes its own folder
- * rather than writing into an existing one (drive.file can't see folders you made by hand).
+ * Where the files go — pick one:
+ *   GOOGLE_DRIVE_FOLDER_ID     an existing folder of yours (the id from its Drive URL).
+ *                              Needs the full `drive` scope: Google's narrow scope can't see
+ *                              folders you made by hand. Sign in again with drive-auth after
+ *                              setting it, so the token carries that scope.
+ *   GOOGLE_DRIVE_FOLDER_NAME   otherwise, a folder the app creates and reuses
+ *                              (default "Clause — contract uploads"). Uses the narrow
+ *                              `drive.file` scope: the app sees only what it created itself.
  * Plain fetch, no googleapis dependency. The local copy on disk stays the source of truth;
  * a Drive failure is recorded on the request and never blocks the intake.
  */
@@ -17,7 +19,9 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const SCOPE = 'https://www.googleapis.com/auth/drive.file';
+const SCOPE_APP_FILES = 'https://www.googleapis.com/auth/drive.file';
+const SCOPE_FULL = 'https://www.googleapis.com/auth/drive';
+export const scope = () => (process.env.GOOGLE_DRIVE_FOLDER_ID ? SCOPE_FULL : SCOPE_APP_FILES);
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const API = 'https://www.googleapis.com/drive/v3';
 const UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3';
@@ -80,6 +84,15 @@ async function readState() {
 }
 
 async function resolveFolder() {
+  const fixed = process.env.GOOGLE_DRIVE_FOLDER_ID;
+  if (fixed) {
+    // Fail with a clear message if the token can't reach the folder (wrong id, or a token
+    // from before the folder was set, which only carries the narrow scope).
+    const f = await api(`${API}/files/${encodeURIComponent(fixed)}?fields=id,mimeType,trashed&supportsAllDrives=true`)
+      .catch((e) => { throw new Error(`can't open folder ${fixed} (${e.message}) — check GOOGLE_DRIVE_FOLDER_ID, then sign in again with drive-auth`); });
+    if (f.mimeType !== FOLDER_MIME || f.trashed) throw new Error(`${fixed} is not an active Drive folder`);
+    return fixed;
+  }
   const name = folderName();
   const state = await readState();
   if (state.folderId && state.folderName === name) {
@@ -123,7 +136,7 @@ export async function saveToDrive(localPath, originalName, { description = '' } 
     data,
     Buffer.from(`\r\n--${boundary}--\r\n`),
   ]);
-  const out = await api(`${UPLOAD_API}/files?uploadType=multipart&fields=id,webViewLink`, {
+  const out = await api(`${UPLOAD_API}/files?uploadType=multipart&fields=id,webViewLink&supportsAllDrives=true`, {
     method: 'POST',
     headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
     body,

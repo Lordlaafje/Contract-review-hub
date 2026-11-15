@@ -15,12 +15,14 @@ function parseJson(text) {
 
 const norm = (s) => String(s || '').toLowerCase().replace(/[“”„‟"'`]/g, '').replace(/\s+/g, ' ').trim();
 
-function checkGrounded(location, src) {
+export function checkGrounded(location, src) {
   const raw = String(location || '').trim();
   if (!raw || raw.toLowerCase() === 'not found in document') return { verifiable: false, grounded: true };
   const n = norm(raw);
   if (n.length < 12) return { verifiable: false, grounded: true };
-  if (/^(art\.?|article|section|sec\.?|clause|cl\.?|§|para\.?|paragraph|schedule|annex|exhibit|appendix)\b[\s\d.,;:()a-z–-]*$/.test(n))
+  // A bare clause reference ("art. 4", "arts. 2, 4 and 7", "§§ 3–5") can't be checked against
+  // the text, so it is neither verified nor downgraded. Plurals matter: models often group them.
+  if (/^(arts?\.?|articles?|sections?|secs?\.?|clauses?|cls?\.?|§§?|paras?\.?|paragraphs?|schedules?|annex(es)?|exhibits?|appendix|appendices)(?![a-z])[\s\d.,;:()a-z–&-]*$/.test(n))
     return { verifiable: false, grounded: true };
   const needle = n.length > 60 ? n.substring(0, 60) : n;
   return { verifiable: true, grounded: src.indexOf(needle) !== -1 };

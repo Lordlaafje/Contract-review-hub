@@ -4,12 +4,15 @@
  * Active when OPENAI_API_KEY is set (see ai.mjs). Plain fetch, no SDK dependency.
  *   OPENAI_API_KEY   required
  *   OPENAI_MODEL     optional, default below
+ *   OPENAI_REASONING_EFFORT  optional: none | minimal | low | medium | high (default low).
+ *                    Higher is slower; at medium/high a review can take several minutes.
  *   OPENAI_BASE_URL  optional, for an Azure/OpenAI-compatible endpoint (default https://api.openai.com/v1)
  *
  * The review prompt asks for strict JSON, so the request uses JSON mode
  * (response_format: json_object) to keep the model from wrapping it in prose.
  */
 const MODEL_ID = process.env.OPENAI_MODEL || 'gpt-5.5';
+const REASONING_EFFORT = process.env.OPENAI_REASONING_EFFORT ?? 'low';
 const BASE_URL = (process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
 const MAX_RETRIES = 4;
 const TIMEOUT_MS = 180_000;
@@ -29,6 +32,8 @@ export async function runReview(prompt, { maxTokens = 4096 } = {}) {
     // generous headroom over the visible-output budget the caller asks for.
     max_completion_tokens: Math.max(maxTokens * 4, 16000),
     response_format: { type: 'json_object' },
+    // Non-reasoning models (e.g. gpt-4.1) reject this field: set OPENAI_REASONING_EFFORT= (empty) for those.
+    ...(REASONING_EFFORT ? { reasoning_effort: REASONING_EFFORT } : {}),
     messages: [{ role: 'user', content: prompt }],
   };
 

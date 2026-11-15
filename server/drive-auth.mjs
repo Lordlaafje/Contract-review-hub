@@ -5,11 +5,12 @@
  *
  * Opens nothing by itself: it prints a Google sign-in link, waits on a local port for
  * Google to redirect back, and prints the refresh token. Run it on your own computer
- * (the browser redirect has to reach this script). Asks only for the drive.file scope.
+ * (the browser redirect has to reach this script). Asks for the full `drive` scope when
+ * GOOGLE_DRIVE_FOLDER_ID is set, otherwise only `drive.file` (see drive.mjs).
  */
 import http from 'node:http';
 import crypto from 'node:crypto';
-import { SCOPE } from './drive.mjs';
+import { scope } from './drive.mjs';
 
 const { GOOGLE_CLIENT_ID: clientId, GOOGLE_CLIENT_SECRET: clientSecret } = process.env;
 if (!clientId || !clientSecret) {
@@ -62,7 +63,7 @@ server.listen(0, '127.0.0.1', () => {
     client_id: clientId,
     redirect_uri: redirectUri,
     response_type: 'code',
-    scope: SCOPE,
+    scope: scope(),
     access_type: 'offline',
     prompt: 'consent',
     state,
@@ -71,5 +72,6 @@ server.listen(0, '127.0.0.1', () => {
   }).toString();
   console.log('\nOpen this link in your browser and sign in with the Google account whose Drive you want to use:\n');
   console.log(auth.toString() + '\n');
+  console.log(`Permission requested: ${scope()}`);
   console.log('Waiting for Google to send you back here…');
 });

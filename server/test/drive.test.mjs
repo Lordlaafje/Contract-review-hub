@@ -79,3 +79,19 @@ test('a revoked sign-in surfaces Google\'s reason', async () => {
   routes.push({ ...tokenRoute, status: 400, json: { error: 'invalid_grant', error_description: 'Token has been expired or revoked.' } });
   await assert.rejects(saveToDrive(await contract(), 'a.pdf'), /Google sign-in failed \(400\): Token has been expired or revoked/);
 });
+
+test('with GOOGLE_DRIVE_FOLDER_ID it uploads straight into that folder and creates nothing', async () => {
+  process.env.GOOGLE_DRIVE_FOLDER_ID = 'my-folder';
+  routes.push(tokenRoute,
+    { match: (u) => u.includes('/drive/v3/files/my-folder?'), json: { id: 'my-folder', mimeType: 'application/vnd.google-apps.folder', trashed: false } },
+    uploadRoute);
+  await saveToDrive(await contract(), 'a.pdf');
+  assert.ok(!calls.some((c) => c.url.includes('files?q=') || c.url.endsWith('files?fields=id')));
+  assert.ok(calls.find((c) => c.url.includes('/upload/')).init.body.toString().includes('"parents":["my-folder"]'));
+});
+
+test('an unreachable folder id fails with a pointer to the fix', async () => {
+  process.env.GOOGLE_DRIVE_FOLDER_ID = 'nope';
+  routes.push(tokenRoute, { match: (u) => u.includes('/files/nope?'), status: 404, json: { error: { message: 'File not found: nope.' } } });
+  await assert.rejects(saveToDrive(await contract(), 'a.pdf'), /can't open folder nope .*GOOGLE_DRIVE_FOLDER_ID/);
+});

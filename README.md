@@ -89,7 +89,9 @@ and it is git-ignored, so keys never end up in the repository.
 live; the six stored reviews are only for offline demoing.
 
 - **OpenAI** (`server/openai.mjs`) — used whenever `OPENAI_API_KEY` is set.
-  `OPENAI_MODEL` picks the model (default `gpt-5.5`); `OPENAI_BASE_URL` points it at an
+  `OPENAI_MODEL` picks the model (default `gpt-5.5`). `OPENAI_REASONING_EFFORT` trades speed for
+  depth (default `low`, about 10–30 seconds a review; `medium` or `high` can take minutes; leave it
+  empty for models without reasoning such as `gpt-4.1`). `OPENAI_BASE_URL` points it at an
   OpenAI-compatible endpoint such as Azure OpenAI.
 - **Claude on AWS Bedrock** (`server/bedrock.mjs`) — used otherwise, pinned to EU regions for data
   residency. Set `AWS_PROFILE` / `AWS_REGION`.
@@ -102,28 +104,38 @@ OPENAI_API_KEY=sk-...
 ```
 
 **Google Drive** (`server/drive.mjs`) — every contract uploaded through the intake form is also
-saved to a folder in your Google Drive, and the request page links to it. The local copy stays the
-source of truth; if Drive is down, the intake still works and the request page says why the copy
-failed. It asks only for the `drive.file` permission, so it can see the files and the folder it
-creates itself and nothing else in your Drive. The folder is called "Clause — contract uploads"
-(change it with `GOOGLE_DRIVE_FOLDER_NAME`).
+saved to Google Drive, and the request page links to it. The local copy stays the source of truth;
+if Drive is down, the intake still works and the request page says why the copy failed.
+
+Where the files go:
+
+- **A folder you choose** — set `GOOGLE_DRIVE_FOLDER_ID` to the id at the end of the folder's URL
+  (`drive.google.com/drive/folders/<id>`). This needs Drive's full-access permission, because
+  Google's narrow permission can't see folders you created by hand.
+- **Otherwise** a folder the app creates, "Clause — contract uploads" (rename it with
+  `GOOGLE_DRIVE_FOLDER_NAME`). This uses the narrow `drive.file` permission: the app sees only the
+  files and folder it created, nothing else in your Drive.
 
 To connect it, once:
 
-1. In the [Google Cloud console](https://console.cloud.google.com/), create a project, enable the
-   **Google Drive API**, set up the OAuth consent screen (add yourself as a test user), and create
-   an **OAuth client ID** of type **Desktop app**.
-2. Put its id and secret in `.env` as `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
-3. Run the sign-in helper on your own computer, open the link it prints, and sign in:
+1. In the [Google Cloud console](https://console.cloud.google.com/), create a project and enable
+   the **Google Drive API**.
+2. Set up the OAuth consent screen. On Google Workspace, choose user type **Internal**: then no
+   Google verification is needed and the sign-in doesn't expire. (On a personal Gmail account it's
+   "External" in "Testing" mode, and Google expires the sign-in after 7 days.)
+3. Create an **OAuth client ID** of type **Desktop app**, and put its id and secret in `.env` as
+   `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, together with `GOOGLE_DRIVE_FOLDER_ID` if you
+   want a folder of your own.
+4. Run the sign-in helper on your own computer, open the link it prints, and sign in:
 
    ```bash
    set -a; . ./.env; set +a; npm --prefix server run drive-auth
    ```
 
-4. Add the `GOOGLE_REFRESH_TOKEN=…` line it prints to `.env` and restart with `./run.sh`.
+5. Add the `GOOGLE_REFRESH_TOKEN=…` line it prints to `.env` and restart with `./run.sh`.
 
-While the consent screen is in "Testing", Google expires the sign-in after 7 days; publish the
-app (no verification is needed for `drive.file`) to keep it.
+If you change `GOOGLE_DRIVE_FOLDER_ID` later, run the sign-in helper again: a token from the
+narrow permission can't reach your own folder.
 
 **E-signature (DocuSign) — not yet integrated.** `server/docusign.mjs` implements the real thing:
 JWT auth, a draft-only envelope, sender view, status polling and signed-PDF download. It is inert
