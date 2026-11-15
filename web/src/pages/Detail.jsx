@@ -167,6 +167,11 @@ export default function Detail() {
         {r.contractFileName ? (
           <a onClick={() => downloadFile(r.id, r.contractFileName)} style={{ cursor: 'pointer' }}>{r.contractFileName}</a>
         ) : <span className="muted">No document uploaded</span>}
+        {r.driveLink ? (
+          <a href={r.driveLink} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13 }}>↗ Open in Google Drive</a>
+        ) : r.driveStatus ? (
+          <span className="muted" style={{ fontSize: 12 }}>{r.driveStatus}</span>
+        ) : null}
       </div>
 
       {/* E-signature (DocuSign) — draft-only: create a draft, then review & send it in DocuSign */}

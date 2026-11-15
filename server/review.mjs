@@ -1,9 +1,9 @@
 /**
- * review.mjs — orchestrate one AI review: build prompt → Bedrock → parse strict JSON →
+ * review.mjs — orchestrate one AI review: build prompt → model (OpenAI or Bedrock, see ai.mjs) → parse strict JSON →
  * light grounding check (downgrade unverifiable quoted citations).
  */
 import { buildReviewPrompt } from './prompt.mjs';
-import { runReview } from './bedrock.mjs';
+import { runReview } from './ai.mjs';
 
 function parseJson(text) {
   let t = String(text || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();

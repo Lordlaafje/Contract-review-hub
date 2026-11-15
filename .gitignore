@@ -4,3 +4,5 @@ server/uploads/
 server/public/
 web/dist/
 .DS_Store
+.env
+run.log

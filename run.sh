@@ -6,6 +6,9 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# Optional settings (API keys etc.) from a .env file next to this script — never committed.
+if [ -f .env ]; then set -a; . ./.env; set +a; fi
+
 command -v node >/dev/null || { echo "Node.js 18+ is required (https://nodejs.org)"; exit 1; }
 
 for port in 4000 5173; do

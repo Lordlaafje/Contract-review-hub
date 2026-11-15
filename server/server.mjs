@@ -4,7 +4,7 @@
  * these for a DB, object storage, and SSO. In production (NODE_ENV=production) the app
  * refuses to boot without LEGAL_PASSWORD — no default credential outside dev.
  *
- * Run:  AWS_PROFILE=sso-bedrock AWS_REGION=eu-central-1 npm start
+ * Run:  OPENAI_API_KEY=… npm start   (or AWS_PROFILE=… AWS_REGION=eu-central-1 for Bedrock)
  */
 import express from 'express';
 import multer from 'multer';
@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { classifyRisk } from './riskEngine.mjs';
 import { extractText } from './extract.mjs';
 import { runAiReview } from './review.mjs';
+import * as drive from './drive.mjs';
 import { createEnvelopeForRequest, getSenderViewUrl, getEnvelopeStatus, downloadSignedDocument, getBindingInfo } from './docusign.mjs';
 import { ASSIGNEES } from './config.mjs';
 import { notifyNewRequest, notifyAssignee, notifyReviewReady } from './notify.mjs';
@@ -170,6 +171,7 @@ app.post('/api/requests', rateLimit({ windowMs: 60 * 60 * 1000, max: 20 }), uplo
   if (req.file) {
     request.contractFileName = req.file.originalname;
     request.contractFilePath = req.file.path;
+    if (drive.isConfigured()) request.driveStatus = 'Saving to Google Drive…';
     const ex = await extractText(req.file.path, req.file.originalname);
     if (ex.ok) { contractText = ex.text; request.extractChars = ex.text.length; }
     else { request.aiStatus = 'Unreadable — ' + ex.note; }
@@ -182,6 +184,24 @@ app.post('/api/requests', rateLimit({ windowMs: 60 * 60 * 1000, max: 20 }), uplo
 
   // Notify the Legal channel (fire-and-forget; no-op if SLACK_WEBHOOK_URL unset).
   notifyNewRequest(request);
+
+  // Copy the upload into Google Drive (background; no-op unless GOOGLE_* is set).
+  if (req.file && drive.isConfigured()) {
+    drive.saveToDrive(req.file.path, req.file.originalname, {
+      description: `Clause intake ${request.id} — ${request.counterpartyName || 'unknown counterparty'}`,
+    })
+      .then((f) => {
+        const fresh = store.get(request.id) || request;
+        Object.assign(fresh, { driveFileId: f.id, driveLink: f.webViewLink, driveStatus: 'Saved to Google Drive' });
+        store.put(fresh);
+      })
+      .catch((e) => {
+        console.error('Drive upload failed:', e.message);
+        const fresh = store.get(request.id) || request;
+        fresh.driveStatus = 'Not saved to Google Drive — ' + e.message;
+        store.put(fresh);
+      });
+  }
 
   // Respond to the requester IMMEDIATELY (they don't see or wait for the AI review).
   res.status(201).json({ ok: true, id: request.id, tier: request.tier });

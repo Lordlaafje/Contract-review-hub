@@ -82,13 +82,48 @@ this belongs behind an admin screen so legal can edit it without a developer.
 The demo deliberately runs on a JSON file with a shared password. Each integration below is written
 and gated behind environment variables — unset, they no-op, which is why the demo is self-contained.
 
-**AI review** — targets Anthropic's Claude on AWS Bedrock (`server/bedrock.mjs`), pinned to EU
-regions for data residency. Set `AWS_PROFILE` / `AWS_REGION` and newly submitted contracts are
-reviewed live. (The six stored reviews are only for offline demoing.)
+Settings can go in a `.env` file next to `run.sh` (one `NAME=value` per line). `run.sh` loads it,
+and it is git-ignored, so keys never end up in the repository.
+
+**AI review** — two providers, chosen in `server/ai.mjs`. Newly submitted contracts are reviewed
+live; the six stored reviews are only for offline demoing.
+
+- **OpenAI** (`server/openai.mjs`) — used whenever `OPENAI_API_KEY` is set.
+  `OPENAI_MODEL` picks the model (default `gpt-5`); `OPENAI_BASE_URL` points it at an
+  OpenAI-compatible endpoint such as Azure OpenAI.
+- **Claude on AWS Bedrock** (`server/bedrock.mjs`) — used otherwise, pinned to EU regions for data
+  residency. Set `AWS_PROFILE` / `AWS_REGION`.
+
+Set `AI_PROVIDER=openai` or `AI_PROVIDER=bedrock` to force one.
 
 ```bash
-AWS_PROFILE=your-profile AWS_REGION=eu-central-1 ./run.sh
+# .env
+OPENAI_API_KEY=sk-...
 ```
+
+**Google Drive** (`server/drive.mjs`) — every contract uploaded through the intake form is also
+saved to a folder in your Google Drive, and the request page links to it. The local copy stays the
+source of truth; if Drive is down, the intake still works and the request page says why the copy
+failed. It asks only for the `drive.file` permission, so it can see the files and the folder it
+creates itself and nothing else in your Drive. The folder is called "Clause — contract uploads"
+(change it with `GOOGLE_DRIVE_FOLDER_NAME`).
+
+To connect it, once:
+
+1. In the [Google Cloud console](https://console.cloud.google.com/), create a project, enable the
+   **Google Drive API**, set up the OAuth consent screen (add yourself as a test user), and create
+   an **OAuth client ID** of type **Desktop app**.
+2. Put its id and secret in `.env` as `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
+3. Run the sign-in helper on your own computer, open the link it prints, and sign in:
+
+   ```bash
+   set -a; . ./.env; set +a; npm --prefix server run drive-auth
+   ```
+
+4. Add the `GOOGLE_REFRESH_TOKEN=…` line it prints to `.env` and restart with `./run.sh`.
+
+While the consent screen is in "Testing", Google expires the sign-in after 7 days; publish the
+app (no verification is needed for `drive.file`) to keep it.
 
 **E-signature (DocuSign) — not yet integrated.** `server/docusign.mjs` implements the real thing:
 JWT auth, a draft-only envelope, sender view, status polling and signed-PDF download. It is inert

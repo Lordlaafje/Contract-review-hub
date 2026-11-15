@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node server.mjs",
     "seed": "node seed.mjs",
+    "drive-auth": "node drive-auth.mjs",
     "test": "node --test"
   },
   "dependencies": {
