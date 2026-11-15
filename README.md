@@ -89,7 +89,7 @@ and it is git-ignored, so keys never end up in the repository.
 live; the six stored reviews are only for offline demoing.
 
 - **OpenAI** (`server/openai.mjs`) — used whenever `OPENAI_API_KEY` is set.
-  `OPENAI_MODEL` picks the model (default `gpt-5`); `OPENAI_BASE_URL` points it at an
+  `OPENAI_MODEL` picks the model (default `gpt-5.5`); `OPENAI_BASE_URL` points it at an
   OpenAI-compatible endpoint such as Azure OpenAI.
 - **Claude on AWS Bedrock** (`server/bedrock.mjs`) — used otherwise, pinned to EU regions for data
   residency. Set `AWS_PROFILE` / `AWS_REGION`.

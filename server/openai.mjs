@@ -9,7 +9,7 @@
  * The review prompt asks for strict JSON, so the request uses JSON mode
  * (response_format: json_object) to keep the model from wrapping it in prose.
  */
-const MODEL_ID = process.env.OPENAI_MODEL || 'gpt-5';
+const MODEL_ID = process.env.OPENAI_MODEL || 'gpt-5.5';
 const BASE_URL = (process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
 const MAX_RETRIES = 4;
 const TIMEOUT_MS = 180_000;
