@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
+
+const OPEN_KEY = 'clause_metrics_open';
+const readOpen = () => { try { return localStorage.getItem(OPEN_KEY) === '1'; } catch { return false; } };
 import { getStats } from '../api.js';
 
-// Dashboard overview: four stat tiles, open requests against SLA, reviews per week, and a
-// health strip. Live figures come from the store; the history is illustrative (flagged by
+// Dashboard overview: four stat tiles, open requests against SLA, and reviews per week. Live figures come from the store; the history is illustrative (flagged by
 // the server as history.demo) and labelled as such here.
 
 const SLA_ROWS = [
@@ -12,15 +14,6 @@ const SLA_ROWS = [
 ];
 
 const fmtDate = (iso) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
-const ago = (iso) => {
-  if (!iso) return 'never';
-  const m = Math.round((Date.now() - Date.parse(iso)) / 60000);
-  if (m < 1) return 'just now';
-  if (m < 60) return `${m} min ago`;
-  const h = Math.round(m / 60);
-  return h < 48 ? `${h} h ago` : `${Math.round(h / 24)} days ago`;
-};
-
 function Tile({ label, value, note }) {
   return (
     <div className="ov-tile">
@@ -104,38 +97,23 @@ function WeeklyBars({ weeks }) {
   );
 }
 
-function Health({ h }) {
-  const items = [
-    {
-      ok: h.ai?.configured,
-      label: 'AI review',
-      text: h.ai?.configured ? `${h.ai.provider} · ${h.ai.model}` : `${h.ai?.provider || 'AI'} not configured — stored sample reviews only`,
-    },
-    {
-      ok: h.drive?.configured,
-      neutral: !h.drive?.configured,
-      label: 'Google Drive',
-      text: h.drive?.configured ? 'Uploads saved to Drive' : 'Not connected — uploads stay on this machine',
-    },
-    {
-      ok: h.reviewsFailed === 0,
-      label: 'Reviews',
-      text: `last review ${ago(h.lastReviewAt)}${h.reviewsRunning ? ` · ${h.reviewsRunning} running` : ''}${h.reviewsFailed ? ` · ${h.reviewsFailed} failed` : ' · none failed'}`,
-    },
-  ];
+export default function Overview({ refreshKey }) {
+  const [open, setOpen] = useState(readOpen);
+  const toggle = () => setOpen((o) => {
+    try { localStorage.setItem(OPEN_KEY, o ? '0' : '1'); } catch { /* private mode: just don't remember */ }
+    return !o;
+  });
   return (
-    <div className="ov-health">
-      {items.map((it) => (
-        <div key={it.label} className="ov-health-item">
-          <span className={`ov-status ${it.ok ? 'good' : it.neutral ? 'neutral' : 'bad'}`} aria-hidden="true">{it.ok ? '✓' : it.neutral ? '–' : '!'}</span>
-          <span><strong>{it.label}</strong> <span className="muted">{it.text}</span></span>
-        </div>
-      ))}
-    </div>
+    <section aria-label="Metrics" className="ov">
+      <button type="button" className="ov-toggle" aria-expanded={open} aria-controls="ov-body" onClick={toggle}>
+        <span className={`ov-caret${open ? ' open' : ''}`} aria-hidden="true">▸</span> Metrics
+      </button>
+      {open && <div id="ov-body"><Metrics refreshKey={refreshKey} /></div>}
+    </section>
   );
 }
 
-export default function Overview({ refreshKey }) {
+function Metrics({ refreshKey }) {
   const [s, setS] = useState(null);
   const [err, setErr] = useState('');
   useEffect(() => {
@@ -152,7 +130,7 @@ export default function Overview({ refreshKey }) {
   const demoTag = hist.demo ? ' · demo' : '';
 
   return (
-    <section aria-label="Overview" style={{ marginBottom: 8 }}>
+    <div style={{ marginTop: 10 }}>
       <div className="ov-tiles">
         <Tile label={`Reviewed, last 30 days${demoTag}`} value={hist.reviewed30d} note="Decisions recorded" />
         <Tile label="Open now" value={p.open} note={`${p.new} new · ${p.inProgress} in progress · ${p.moreInfo} waiting for info`} />
@@ -180,8 +158,6 @@ export default function Overview({ refreshKey }) {
           </details>
         </div>
       </div>
-
-      <Health h={s.health} />
-    </section>
+    </div>
   );
 }

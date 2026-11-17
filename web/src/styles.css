@@ -119,6 +119,11 @@ tr.clickable:hover { background: #f9fafb; cursor: pointer; }
 }
 
 /* ── Dashboard overview ── */
+.ov { margin-bottom: 16px; }
+.ov-toggle { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 7px 12px; font: inherit; font-size: 14px; font-weight: 600; color: var(--brand-dark); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.ov-toggle:hover { background: #f1f4f7; }
+.ov-caret { display: inline-block; transition: transform .15s; font-size: 12px; }
+.ov-caret.open { transform: rotate(90deg); }
 .ov-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 12px; }
 .ov-tile { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
 .ov-label { font-size: 13px; color: var(--muted-strong); }
@@ -140,7 +145,6 @@ tr.clickable:hover { background: #f9fafb; cursor: pointer; }
 .ov-status.good { background: var(--green); }
 .ov-status.warn { background: #d98a1c; color: #1f2933; }
 .ov-status.bad { background: var(--red); }
-.ov-status.neutral { background: #c9ced6; color: #1f2933; }
 .ov-chart { position: relative; }
 .ov-grid { stroke: var(--line); stroke-width: 1; }
 .ov-axis { font-size: 10px; fill: var(--muted); }
@@ -150,8 +154,6 @@ tr.clickable:hover { background: #f9fafb; cursor: pointer; }
 .ov-tip { position: absolute; top: 0; transform: translateX(-50%); background: var(--brand-dark); color: #fff; font-size: 12px; padding: 4px 8px; border-radius: 6px; white-space: nowrap; pointer-events: none; }
 .ov-table { margin-top: 6px; }
 .ov-table th, .ov-table td { padding: 4px 10px; font-size: 12px; }
-.ov-health { display: flex; flex-wrap: wrap; gap: 8px 24px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 16px; margin: 12px 0 4px; font-size: 13px; }
-.ov-health-item { display: flex; align-items: center; gap: 8px; }
 @media (max-width: 860px) {
   .ov-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ov-panels { grid-template-columns: 1fr; }
