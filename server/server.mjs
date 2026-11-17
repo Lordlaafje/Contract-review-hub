@@ -368,4 +368,14 @@ app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
 });
 
 const PORT = Number(process.env.PORT || 4000);
+// A review or Drive copy still marked as running when the server starts was cut off by a
+// restart and will never finish on its own: say so, so the page offers Re-run instead of
+// spinning forever.
+for (const r of store.list()) {
+  const fix = {};
+  if (/running/i.test(r.aiStatus || '')) fix.aiStatus = 'AI review interrupted (the server restarted) — click Re-run';
+  if (/saving/i.test(r.driveStatus || '')) fix.driveStatus = 'Not saved to Google Drive — the server restarted during the upload';
+  if (Object.keys(fix).length) store.patch(r.id, fix);
+}
+
 app.listen(PORT, () => console.log(`Clause — contract review running on http://localhost:${PORT}`));

@@ -61,6 +61,22 @@ export default function Detail() {
   });
   useEffect(() => { load(); getAssignees().then(setAssignees); docusignConfig().then(setDsCfg).catch(() => {}); }, [id]);
 
+  // While the AI review (or the Drive copy) is still running in the background, check every
+  // few seconds and fill in the result when it lands. Only those fields are refreshed, so a
+  // decision being typed on the page isn't overwritten.
+  const pending = !!r && (/running/i.test(r.aiStatus || '') || /saving/i.test(r.driveStatus || ''));
+  useEffect(() => {
+    if (!pending) return undefined;
+    const t = setInterval(() => {
+      getRequest(id).then((d) => setR((cur) => (cur && cur.id === d.id ? {
+        ...cur,
+        aiStatus: d.aiStatus, aiError: d.aiError, review: d.review, grounding: d.grounding, aiMeta: d.aiMeta,
+        driveStatus: d.driveStatus, driveLink: d.driveLink, driveFileId: d.driveFileId,
+      } : cur))).catch(() => {});
+    }, 3000);
+    return () => clearInterval(t);
+  }, [id, pending]);
+
   if (!r) return <div className="container"><p className="muted">Loading…</p></div>;
 
   async function rerun() { setBusy(true); await rerunReview(id); await load(); setBusy(false); }
