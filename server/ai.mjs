@@ -13,6 +13,15 @@ export function providerName() {
   return openai.isConfigured() ? 'openai' : 'bedrock';
 }
 
+/** For the dashboard health strip: which provider and model, and whether it has credentials. */
+export function describeProvider() {
+  if (providerName() === 'openai') {
+    return { provider: 'OpenAI', model: openai.MODEL_ID, configured: openai.isConfigured() };
+  }
+  const configured = !!(process.env.AWS_PROFILE || process.env.AWS_ACCESS_KEY_ID || process.env.BEDROCK_ASSUME_ROLE_ARN);
+  return { provider: 'AWS Bedrock', model: bedrock.MODEL_ID, region: bedrock.REGION, configured };
+}
+
 export function runReview(prompt, opts) {
   return providerName() === 'openai' ? openai.runReview(prompt, opts) : bedrock.runReview(prompt, opts);
 }

@@ -83,6 +83,18 @@ Everything a lawyer would want to tune lives in one file, **`server/config.mjs`*
 Change a threshold there and both the risk engine and the AI review follow. In a real deployment
 this belongs behind an admin screen so legal can edit it without a developer.
 
+## Dashboard overview
+
+The top of the legal dashboard shows how the team is doing: reviews in the last 30 days, what's
+open, how many open requests are within their SLA (LOW 2 days, MEDIUM 5, HIGH 10, from submission
+to decision), average turnaround, reviews per week, and a health strip (AI provider and model,
+Google Drive, last review, failed reviews).
+
+What's open and the SLA status are live. The history — 30-day count, turnaround, reviews per
+week — is **illustrative**: six sample requests are too few for a real trend, so a fixed demo
+series is added to the real completions and labelled "demo". Set `DEMO_STATS=off` to show real
+completions only. SLA targets live in `server/stats.mjs`.
+
 ## Wiring it up for real
 
 The demo deliberately runs on a JSON file with a shared password. Each integration below is written

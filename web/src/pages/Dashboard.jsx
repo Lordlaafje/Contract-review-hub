@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { listRequests, getAssignees, assign, setStatus } from '../api.js';
+import Overview from '../components/Overview.jsx';
 
 const STATUSES = ['New', 'In progress', 'More information requested', 'Done', 'Discarded'];
 const DS_SHORT = { created: 'draft', sent: 'sent', delivered: 'viewed', completed: 'signed', declined: 'declined', voided: 'voided' };
@@ -47,6 +48,8 @@ export default function Dashboard() {
         <a className="btn" href="/" target="_blank" rel="noopener" style={{ display: 'inline-block', textDecoration: 'none' }}>↗ Open intake form</a>
       </div>
       <p className="sub">Requests arrive via the public intake form (share that link with requesters). Assign, set status, and open a request for its AI recommendation.</p>
+
+      <Overview refreshKey={items.map((x) => x.status).join()} />
 
       {/* Filters */}
       <div className="card" style={{ display: 'flex', gap: 16, alignItems: 'flex-end', flexWrap: 'wrap' }}>

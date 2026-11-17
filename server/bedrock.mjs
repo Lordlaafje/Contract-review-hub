@@ -12,8 +12,8 @@
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
 import { STSClient, AssumeRoleCommand } from '@aws-sdk/client-sts';
 
-const REGION = process.env.BEDROCK_REGION || 'eu-central-1';
-const MODEL_ID = process.env.BEDROCK_MODEL_ID || 'eu.anthropic.claude-opus-4-8';
+export const REGION = process.env.BEDROCK_REGION || 'eu-central-1';
+export const MODEL_ID = process.env.BEDROCK_MODEL_ID || 'eu.anthropic.claude-opus-4-8';
 const ANTHROPIC_VERSION = 'bedrock-2023-05-31';
 const MAX_RETRIES = 4;
 const ASSUME_ROLE_ARN = process.env.BEDROCK_ASSUME_ROLE_ARN || '';

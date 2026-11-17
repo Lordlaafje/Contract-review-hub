@@ -15,6 +15,8 @@ import { classifyRisk } from './riskEngine.mjs';
 import { extractText } from './extract.mjs';
 import { runAiReview } from './review.mjs';
 import * as drive from './drive.mjs';
+import { computeStats } from './stats.mjs';
+import { describeProvider } from './ai.mjs';
 import { createEnvelopeForRequest, getSenderViewUrl, getEnvelopeStatus, downloadSignedDocument, getBindingInfo } from './docusign.mjs';
 import { ASSIGNEES } from './config.mjs';
 import { notifyNewRequest, notifyAssignee, notifyReviewReady } from './notify.mjs';
@@ -106,6 +108,14 @@ const INTAKE_FIELDS = [
 ];
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
+// Dashboard overview: live pipeline + SLA, (demo) history, and system health.
+app.get('/api/stats', requireAuth, (req, res) => res.json(computeStats(store.list(), {
+  demo: String(process.env.DEMO_STATS || 'on').toLowerCase() !== 'off',
+  health: {
+    ai: describeProvider(),
+    drive: { configured: drive.isConfigured(), folderId: process.env.GOOGLE_DRIVE_FOLDER_ID || null },
+  },
+})));
 app.get('/api/assignees', requireAuth, (req, res) => res.json({ assignees: ASSIGNEES }));
 
 // Quick status toggle. Discarding REQUIRES a reason.
@@ -212,7 +222,7 @@ app.post('/api/requests', rateLimit({ windowMs: 60 * 60 * 1000, max: 20 }), uplo
       runAiReview({ request, tier: cls.tier, triggers: cls.triggers, profile: cls.profile, contractText })
         .then((out) => {
           const fresh = store.get(request.id) || request;
-          if (out.ok) { fresh.review = out.review; fresh.grounding = out.grounding; fresh.aiMeta = out.meta; fresh.aiStatus = 'AI review complete'; }
+          if (out.ok) { fresh.review = out.review; fresh.grounding = out.grounding; fresh.aiMeta = out.meta; fresh.aiStatus = 'AI review complete'; fresh.reviewedAt = new Date().toISOString(); }
           else { fresh.aiStatus = out.status; fresh.aiError = out.error || ''; }
           store.put(fresh);
           if (out.ok) notifyReviewReady(fresh); // fire-and-forget; no-op unless Slack configured
@@ -247,7 +257,7 @@ app.post('/api/requests/:id/review', requireAuth, async (req, res) => {
   if (!r.contractText) return res.status(400).json({ message: 'No contract text to review' });
   const cls = classifyRisk(r);
   const out = await runAiReview({ request: r, tier: r.tier || cls.tier, triggers: r.triggers || cls.triggers, profile: cls.profile, contractText: r.contractText });
-  if (out.ok) { r.review = out.review; r.grounding = out.grounding; r.aiMeta = out.meta; r.aiStatus = 'AI review complete'; }
+  if (out.ok) { r.review = out.review; r.grounding = out.grounding; r.aiMeta = out.meta; r.aiStatus = 'AI review complete'; r.reviewedAt = new Date().toISOString(); }
   else { r.aiStatus = out.status; r.aiError = out.error || ''; }
   store.put(r);
   res.json(publicView(r));

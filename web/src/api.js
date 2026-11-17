@@ -33,6 +33,7 @@ export async function getRequest(id) {
   if (!r.ok) throw new Error('not found');
   return r.json();
 }
+export async function getStats() { return (await authed('/stats')).json(); }
 export async function getAssignees() { return (await (await authed('/assignees')).json()).assignees || []; }
 export async function rerunReview(id) { return (await authed(`/requests/${id}/review`, { method: 'POST' })).json(); }
 export async function saveDecision(id, payload) {
