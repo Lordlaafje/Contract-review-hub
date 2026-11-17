@@ -95,6 +95,14 @@ week — is **illustrative**: six sample requests are too few for a real trend, 
 series is added to the real completions and labelled "demo". Set `DEMO_STATS=off` to show real
 completions only. SLA targets live in `server/stats.mjs`.
 
+## Settings (demo)
+
+**Settings** in the legal top bar shows how the tool is set up, in five tabs: the intake form
+(every question, its answer type, whether it's required and its options), the risk rules, the
+playbook, what the AI looks for per contract type, and the legal counsels. The values are the real
+ones the app runs on, from `server/config.mjs`. Everything can be edited on screen, but **nothing
+is saved**: Save only shows a notice, and the app keeps using `config.mjs`.
+
 ## Wiring it up for real
 
 The demo deliberately runs on a JSON file with a shared password. Each integration below is written

@@ -158,3 +158,28 @@ tr.clickable:hover { background: #f9fafb; cursor: pointer; }
   .ov-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ov-panels { grid-template-columns: 1fr; }
 }
+
+/* ── Settings (demo) ── */
+.st-banner { margin-bottom: 12px; }
+.st-tabs { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid var(--line); margin: 4px 0 16px; }
+.st-tabs button { background: none; border: none; border-bottom: 2px solid transparent; padding: 9px 12px; font: inherit; font-size: 14px; color: var(--muted-strong); cursor: pointer; margin-bottom: -1px; }
+.st-tabs button.active { color: var(--brand-dark); border-bottom-color: var(--brand); font-weight: 600; }
+.st-row { display: grid; grid-template-columns: 240px 1fr; gap: 16px; padding: 10px 0; border-top: 1px solid var(--line); align-items: start; }
+.st-row:first-of-type { border-top: none; }
+.st-label { font-size: 14px; font-weight: 600; }
+.st-q { padding: 10px 0; border-top: 1px solid var(--line); }
+.st-q:first-of-type { border-top: none; }
+.st-q-head { display: flex; gap: 8px; align-items: center; }
+.st-q-head > input { flex: 1; }
+.st-check { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-weight: 500; white-space: nowrap; }
+.st-check input { width: auto; }
+.st-x { padding: 6px 10px; }
+.st-opts { margin-top: 8px; font-size: 13px; min-height: 0; }
+.st-big { font-size: 13px; line-height: 1.5; }
+.st-type summary { cursor: pointer; font-size: 15px; }
+.st-type[open] summary { margin-bottom: 8px; }
+@media (max-width: 700px) {
+  .st-row { grid-template-columns: 1fr; gap: 6px; }
+  .st-q-head { flex-wrap: wrap; }
+  .st-q-head > input { flex-basis: 100%; }
+}

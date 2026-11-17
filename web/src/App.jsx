@@ -1,8 +1,9 @@
-import { Routes, Route, Link, Navigate, useNavigate } from 'react-router-dom';
+import { Routes, Route, Link, NavLink, Navigate, useNavigate } from 'react-router-dom';
 import Intake from './pages/Intake.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Detail from './pages/Detail.jsx';
 import Login from './pages/Login.jsx';
+import Settings from './pages/Settings.jsx';
 import { isAuthed, logout } from './auth.js';
 
 function PublicLayout({ children }) {
@@ -28,6 +29,8 @@ function LegalLayout({ children }) {
         <Link to="/legal" className="logo">Clause</Link>
         <span style={{ opacity: 0.6, fontSize: 14 }}>Legal — Contract Review</span>
         <nav style={{ marginLeft: 'auto' }}>
+          <NavLink to="/legal" end>Dashboard</NavLink>
+          <NavLink to="/legal/settings">Settings</NavLink>
           <a onClick={() => { logout(); nav('/legal/login'); }} style={{ cursor: 'pointer' }}>Sign out</a>
         </nav>
       </div>
@@ -51,6 +54,7 @@ export default function App() {
       <Route path="/legal/login" element={<Login />} />
       <Route path="/legal" element={<Protected><Dashboard /></Protected>} />
       <Route path="/legal/requests/:id" element={<Protected><Detail /></Protected>} />
+      <Route path="/legal/settings" element={<Protected><Settings /></Protected>} />
 
 
       <Route path="*" element={<Navigate to="/" replace />} />

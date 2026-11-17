@@ -16,6 +16,7 @@ import { extractText } from './extract.mjs';
 import { runAiReview } from './review.mjs';
 import * as drive from './drive.mjs';
 import { computeStats } from './stats.mjs';
+import { settingsView } from './settingsView.mjs';
 import { describeProvider } from './ai.mjs';
 import { createEnvelopeForRequest, getSenderViewUrl, getEnvelopeStatus, downloadSignedDocument, getBindingInfo } from './docusign.mjs';
 import { ASSIGNEES } from './config.mjs';
@@ -108,6 +109,9 @@ const INTAKE_FIELDS = [
 ];
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
+// Settings page (demo: shows the real configuration; edits on that page are not saved).
+app.get('/api/settings', requireAuth, (req, res) => res.json(settingsView()));
+
 // Dashboard overview: live pipeline + SLA, (demo) history, and system health.
 app.get('/api/stats', requireAuth, (req, res) => res.json(computeStats(store.list(), {
   demo: String(process.env.DEMO_STATS || 'on').toLowerCase() !== 'off',
