@@ -18,6 +18,12 @@ A lawyer picks it up on a dashboard, decides, and records the decision.
 
 ## Run it
 
+**First time with your own keys** (OpenAI, Google Drive): run `./setup.sh`. It asks for your
+OpenAI key, the Drive folder for uploads and the Google sign-in, saves them to a private `.env`
+file, and starts the demo. Skip any step to run without it. After that, `./run.sh` is enough.
+
+**Just the offline demo:**
+
 ```bash
 ./run.sh
 ```

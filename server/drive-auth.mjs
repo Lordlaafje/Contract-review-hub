@@ -8,6 +8,7 @@
  * (the browser redirect has to reach this script). Asks for the full `drive` scope when
  * GOOGLE_DRIVE_FOLDER_ID is set, otherwise only `drive.file` (see drive.mjs).
  */
+import fs from 'node:fs';
 import http from 'node:http';
 import crypto from 'node:crypto';
 import { scope } from './drive.mjs';
@@ -50,8 +51,18 @@ const server = http.createServer(async (req, res) => {
     console.error('Token exchange failed:', out.error_description || out.error || tokenRes.status);
     return finish('Sign-in failed — see the terminal.', 1);
   }
-  console.log('\n✅ Signed in. Add this line to your .env file (keep it secret):\n');
-  console.log(`GOOGLE_REFRESH_TOKEN=${out.refresh_token}\n`);
+  if (process.env.DRIVE_AUTH_ENV_FILE) {
+    // Called from setup.sh: write the token into .env directly instead of printing it.
+    const file = process.env.DRIVE_AUTH_ENV_FILE;
+    const lines = (fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '').split('\n')
+      .filter((l) => l && !l.startsWith('GOOGLE_REFRESH_TOKEN='));
+    lines.push(`GOOGLE_REFRESH_TOKEN=${out.refresh_token}`);
+    fs.writeFileSync(file, lines.join('\n') + '\n', { mode: 0o600 });
+    console.log(`\n✅ Signed in. Saved GOOGLE_REFRESH_TOKEN to ${file}.\n`);
+  } else {
+    console.log('\n✅ Signed in. Add this line to your .env file (keep it secret):\n');
+    console.log(`GOOGLE_REFRESH_TOKEN=${out.refresh_token}\n`);
+  }
   finish('Done — you can close this tab and go back to the terminal.');
 });
 
