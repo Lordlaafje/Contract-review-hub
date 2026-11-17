@@ -36,7 +36,7 @@ Node.js 18+ and nothing else. First run installs dependencies and loads the demo
 | **Legal dashboard** — what the legal team sees | http://localhost:5173/legal |
 | Dashboard password | `demo` |
 
-Stop with Ctrl-C. Reload the sample data any time with `./run.sh --reseed`.
+Stop with Ctrl-C, or `./stop.sh` from another window. Reload the sample data any time with `./run.sh --reseed`.
 
 **No API keys, no accounts, no internet required.** The six sample reviews are stored rather than
 generated, so the demo works offline — on conference wifi, or on a laptop with nothing configured.

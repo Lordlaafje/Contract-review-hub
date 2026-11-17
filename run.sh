@@ -12,7 +12,8 @@ if [ -f .env ]; then set -a; . ./.env; set +a; fi
 command -v node >/dev/null || { echo "Node.js 18+ is required (https://nodejs.org)"; exit 1; }
 
 for port in 4000 5173; do
-  lsof -ti:"$port" -sTCP:LISTEN 2>/dev/null | xargs -r kill 2>/dev/null || true
+  old=$(lsof -ti:"$port" -sTCP:LISTEN 2>/dev/null || true)
+  if [ -n "$old" ]; then kill $old 2>/dev/null || true; fi
 done
 
 [ -d server/node_modules ] || (echo "Installing backend dependencies…"  && npm --prefix server install --silent)
@@ -23,8 +24,21 @@ if [ "${1:-}" = "--reseed" ] || [ ! -f server/data/requests.json ]; then
 fi
 
 pids=()
-cleanup() { echo; echo "Stopping…"; for p in "${pids[@]:-}"; do kill "$p" 2>/dev/null || true; done; }
-trap cleanup EXIT INT TERM
+# Ctrl-C (or closing the window) stops both servers. npm starts Vite as a child process,
+# so stop the children too, and stop.sh forces anything that is still holding a port.
+cleanup() {
+  trap - EXIT INT TERM
+  echo; echo "Stopping…"
+  for p in "${pids[@]:-}"; do
+    [ -n "$p" ] || continue
+    pkill -TERM -P "$p" 2>/dev/null || true
+    kill "$p" 2>/dev/null || true
+  done
+  ./stop.sh >/dev/null 2>&1 || true
+  echo "Stopped."
+  exit 0
+}
+trap cleanup EXIT INT TERM HUP
 
 node server/server.mjs & pids+=($!)
 npm --prefix web run dev --silent & pids+=($!)
@@ -47,7 +61,7 @@ cat <<BANNER
      Six sample contracts are loaded, each with a completed review.
      Reload the demo data any time with:  ./run.sh --reseed
 
-     Press Ctrl-C to stop.
+     Press Ctrl-C to stop (or run ./stop.sh from another window).
 
 BANNER
 
